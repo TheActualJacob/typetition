@@ -81,7 +81,9 @@ function App() {
   const [typingStartTime, setTypingStartTime] = useState(null);
   const [wordTimestamps, setWordTimestamps] = useState([]);
   const socketRef = useRef(null);
-  const textareaRef = useRef(null);
+  const isActiveTypingRef = useRef(false);
+  const activeTargetRef = useRef('');
+  const typingModeRef = useRef(null);
 
   const activeTarget = useMemo(() => {
     if (mode === 'training' && training) return training.text ?? '';
@@ -141,6 +143,52 @@ function App() {
   useEffect(() => {
     function onDown(event) {
       setPressedKeys((prev) => [...new Set([...prev, event.key])]);
+
+      if (!isActiveTypingRef.current) return;
+      // Don't interfere with browser shortcuts
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+      if (event.key === 'Backspace') {
+        event.preventDefault();
+        setTyped((prev) => {
+          const next = prev.slice(0, -1);
+          const m = typingModeRef.current;
+          if (m === 'training') socketRef.current?.send('training_input', { typed: next });
+          if (m === 'competition') socketRef.current?.send('competition_input', { typed: next });
+          return next;
+        });
+      } else if (event.key.length === 1) {
+        event.preventDefault();
+        const now = Date.now();
+        const char = event.key;
+        const target = activeTargetRef.current;
+        const m = typingModeRef.current;
+
+        setTyped((prev) => {
+          const next = prev + char;
+          const idx = prev.length; // index of the new character
+
+          if (prev.length === 0) setTypingStartTime(now);
+
+          const expected = target[idx];
+          if (expected && char !== expected) {
+            const k = expected.toLowerCase();
+            setKeyErrorMap((em) => ({ ...em, [k]: (em[k] ?? 0) + 1 }));
+          }
+          if (char === ' ' && idx > 0) {
+            const wordsBefore = next.slice(0, idx).trim().split(/\s+/).filter(Boolean);
+            const completedWord = wordsBefore[wordsBefore.length - 1] ?? '';
+            setWordTimestamps((wt) => [
+              ...wt,
+              { wordIdx: wordsBefore.length - 1, word: completedWord, t: now },
+            ]);
+          }
+
+          if (m === 'training') socketRef.current?.send('training_input', { typed: next });
+          if (m === 'competition') socketRef.current?.send('competition_input', { typed: next });
+          return next;
+        });
+      }
     }
     function onUp(event) {
       setPressedKeys((prev) => prev.filter((key) => key !== event.key));
@@ -164,7 +212,6 @@ function App() {
     setTypingStartTime(null);
     setKeyErrorMap({});
     socketRef.current?.send('start_training', { lessonId });
-    setTimeout(() => textareaRef.current?.focus(), 100);
   }
 
   function startRandomTraining(wordCount = 30) {
@@ -174,7 +221,6 @@ function App() {
     setKeyErrorMap({});
     setWordTimestamps([]);
     socketRef.current?.send('start_random_training', { wordCount });
-    setTimeout(() => textareaRef.current?.focus(), 100);
   }
 
   function joinCompetition() {
@@ -184,7 +230,6 @@ function App() {
     setKeyErrorMap({});
     setWordTimestamps([]);
     socketRef.current?.send('join_competition');
-    setTimeout(() => textareaRef.current?.focus(), 100);
   }
 
   function startCompetition() {
@@ -199,40 +244,17 @@ function App() {
     setWordTimestamps([]);
     setMode('training');
     socketRef.current?.send('start_targeted_training', { targetChars: weakKeys, wordCount: 30 });
-    setTimeout(() => textareaRef.current?.focus(), 100);
   }
 
-  function handleTyping(value) {
-    const now = Date.now();
-    if (!typingStartTime && value.length === 1) {
-      setTypingStartTime(now);
-    }
-    if (value.length > typed.length) {
-      const idx = value.length - 1;
-      const expected = activeTarget[idx];
-      const actual = value[idx];
-      if (expected && actual !== expected) {
-        const k = expected.toLowerCase();
-        setKeyErrorMap((prev) => ({ ...prev, [k]: (prev[k] ?? 0) + 1 }));
-      }
-      // Record timestamp when a space completes a word
-      if (actual === ' ' && idx > 0) {
-        const wordsBefore = value.slice(0, idx).trim().split(/\s+/).filter(Boolean);
-        const completedWord = wordsBefore[wordsBefore.length - 1] ?? '';
-        setWordTimestamps((prev) => [
-          ...prev,
-          { wordIdx: wordsBefore.length - 1, word: completedWord, t: now },
-        ]);
-      }
-    }
-    setTyped(value);
-    if (mode === 'training') socketRef.current?.send('training_input', { typed: value });
-    if (mode === 'competition') socketRef.current?.send('competition_input', { typed: value });
-  }
 
   const isActiveTyping =
     (mode === 'training' && !!training) ||
     (mode === 'competition' && !!competitionState?.started);
+
+  // Keep refs in sync so keydown handler always has current values
+  useEffect(() => { isActiveTypingRef.current = isActiveTyping; }, [isActiveTyping]);
+  useEffect(() => { activeTargetRef.current = activeTarget; }, [activeTarget]);
+  useEffect(() => { typingModeRef.current = mode; }, [mode]);
 
   const isAfterView =
     (mode === 'training' && !!lessonResult) ||
@@ -746,44 +768,6 @@ function App() {
               </div>
             )}
 
-            {/* Hidden textarea */}
-            <textarea
-              ref={textareaRef}
-              value={typed}
-              onChange={(e) => handleTyping(e.target.value)}
-              style={{
-                position: 'absolute',
-                opacity: 0,
-                pointerEvents: 'none',
-                width: 1,
-                height: 1,
-                top: -9999,
-                left: -9999,
-              }}
-              aria-label="Typing input"
-              tabIndex={-1}
-            />
-
-            {/* Click-to-focus overlay hint */}
-            {!document.activeElement?.matches('textarea') && (
-              <div
-                onClick={() => textareaRef.current?.focus()}
-                style={{
-                  width: '100%',
-                  marginBottom: 20,
-                  padding: '10px',
-                  borderRadius: 10,
-                  border: '0.5px dashed rgba(255,255,255,0.1)',
-                  textAlign: 'center',
-                  fontSize: 12,
-                  color: 'rgba(255,255,255,0.25)',
-                  cursor: 'text',
-                  display: 'none',
-                }}
-              >
-                Click here to focus
-              </div>
-            )}
           </div>
         )}
 
