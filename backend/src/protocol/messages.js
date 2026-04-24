@@ -14,6 +14,7 @@ const ClientEvent = {
   START_TRAINING: 'start_training',
   START_RANDOM_TRAINING: 'start_random_training',
   TRAINING_INPUT: 'training_input',
+  START_TARGETED_TRAINING: 'start_targeted_training',
   JOIN_COMPETITION: 'join_competition',
   START_COMPETITION: 'start_competition',
   COMPETITION_INPUT: 'competition_input',

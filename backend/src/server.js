@@ -97,6 +97,14 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (msg.type === ClientEvent.START_TARGETED_TRAINING) {
+      const targetChars = msg.payload?.targetChars ?? [];
+      const wordCount = Math.min(100, Math.max(10, Number(msg.payload?.wordCount ?? 30)));
+      const snapshot = trainingManager.startTargeted(client.sessionId, targetChars, wordCount);
+      send(ws, ServerEvent.TRAINING_STATE, snapshot);
+      return;
+    }
+
     if (msg.type === ClientEvent.TRAINING_INPUT) {
       const typed = String(msg.payload?.typed || '');
       const output = trainingManager.updateInput(client.sessionId, typed);

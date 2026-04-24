@@ -3,6 +3,7 @@ import { ProgressBar } from './components/ProgressBar';
 import { TypingTextPanel } from './components/TypingTextPanel';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
 import { KeyboardHeatmap } from './components/KeyboardHeatmap';
+import { SessionStats } from './components/SessionStats';
 import { createSocketClient } from './ws/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,37 @@ function calcAccuracy(target, typed) {
   return Math.round((correct / typed.length) * 100);
 }
 
+function calcBurstWpm(wordTimestamps, windowMs = 5000) {
+  if (!wordTimestamps.length) return 0;
+  let max = 0;
+  for (const { t } of wordTimestamps) {
+    const count = wordTimestamps.filter((w) => w.t > t - windowMs && w.t <= t).length;
+    const wpm = Math.round((count / windowMs) * 60000);
+    if (wpm > max) max = wpm;
+  }
+  return max;
+}
+
+function buildWpmTimeSeries(wordTimestamps, typingStartTime) {
+  if (!typingStartTime || !wordTimestamps.length) return [];
+  const lastT = wordTimestamps[wordTimestamps.length - 1].t;
+  const elapsedSec = Math.ceil((lastT - typingStartTime) / 1000);
+  return Array.from({ length: elapsedSec }, (_, i) => {
+    const t = typingStartTime + (i + 1) * 1000;
+    const wordsDone = wordTimestamps.filter((w) => w.t <= t).length;
+    return { t: i + 1, wpm: wordsDone > 0 ? Math.round(wordsDone / ((i + 1) / 60)) : 0 };
+  });
+}
+
+function buildWpmPerWord(wordTimestamps, typingStartTime) {
+  if (!typingStartTime || !wordTimestamps.length) return [];
+  return wordTimestamps.map(({ word, t }, i) => ({
+    word: i + 1,
+    label: word,
+    wpm: Math.round((i + 1) / ((t - typingStartTime) / 60000)),
+  }));
+}
+
 function App() {
   const [name, setName] = useState('');
   const [joined, setJoined] = useState(false);
@@ -47,6 +79,7 @@ function App() {
   const [keyErrorMap, setKeyErrorMap] = useState({});
   const [typed, setTyped] = useState('');
   const [typingStartTime, setTypingStartTime] = useState(null);
+  const [wordTimestamps, setWordTimestamps] = useState([]);
   const socketRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -58,6 +91,23 @@ function App() {
 
   const wpm = useMemo(() => calcWpm(typed, typingStartTime), [typed, typingStartTime]);
   const accuracy = useMemo(() => calcAccuracy(activeTarget, typed), [activeTarget, typed]);
+  const burstWpm = useMemo(() => calcBurstWpm(wordTimestamps), [wordTimestamps]);
+  const wpmTimeSeries = useMemo(
+    () => buildWpmTimeSeries(wordTimestamps, typingStartTime),
+    [wordTimestamps, typingStartTime],
+  );
+  const wpmPerWord = useMemo(
+    () => buildWpmPerWord(wordTimestamps, typingStartTime),
+    [wordTimestamps, typingStartTime],
+  );
+  const elapsedMs = useMemo(() => {
+    if (!typingStartTime || !wordTimestamps.length) return 0;
+    return wordTimestamps[wordTimestamps.length - 1].t - typingStartTime;
+  }, [typingStartTime, wordTimestamps]);
+  const totalErrors = useMemo(
+    () => Object.values(keyErrorMap).reduce((s, v) => s + v, 0),
+    [keyErrorMap],
+  );
 
   const selectedProgress = useMemo(() => {
     if (mode === 'training') return training?.progress ?? 0;
@@ -122,6 +172,7 @@ function App() {
     setLessonResult(null);
     setTypingStartTime(null);
     setKeyErrorMap({});
+    setWordTimestamps([]);
     socketRef.current?.send('start_random_training', { wordCount });
     setTimeout(() => textareaRef.current?.focus(), 100);
   }
@@ -131,6 +182,7 @@ function App() {
     setTyped('');
     setTypingStartTime(null);
     setKeyErrorMap({});
+    setWordTimestamps([]);
     socketRef.current?.send('join_competition');
     setTimeout(() => textareaRef.current?.focus(), 100);
   }
@@ -139,9 +191,21 @@ function App() {
     socketRef.current?.send('start_competition');
   }
 
+  function startTargetedTraining(weakKeys) {
+    setTyped('');
+    setLessonResult(null);
+    setTypingStartTime(null);
+    setKeyErrorMap({});
+    setWordTimestamps([]);
+    setMode('training');
+    socketRef.current?.send('start_targeted_training', { targetChars: weakKeys, wordCount: 30 });
+    setTimeout(() => textareaRef.current?.focus(), 100);
+  }
+
   function handleTyping(value) {
+    const now = Date.now();
     if (!typingStartTime && value.length === 1) {
-      setTypingStartTime(Date.now());
+      setTypingStartTime(now);
     }
     if (value.length > typed.length) {
       const idx = value.length - 1;
@@ -150,6 +214,15 @@ function App() {
       if (expected && actual !== expected) {
         const k = expected.toLowerCase();
         setKeyErrorMap((prev) => ({ ...prev, [k]: (prev[k] ?? 0) + 1 }));
+      }
+      // Record timestamp when a space completes a word
+      if (actual === ' ' && idx > 0) {
+        const wordsBefore = value.slice(0, idx).trim().split(/\s+/).filter(Boolean);
+        const completedWord = wordsBefore[wordsBefore.length - 1] ?? '';
+        setWordTimestamps((prev) => [
+          ...prev,
+          { wordIdx: wordsBefore.length - 1, word: completedWord, t: now },
+        ]);
       }
     }
     setTyped(value);
@@ -160,6 +233,15 @@ function App() {
   const isActiveTyping =
     (mode === 'training' && !!training) ||
     (mode === 'competition' && !!competitionState?.started);
+
+  const isAfterView =
+    (mode === 'training' && !!lessonResult) ||
+    (mode === 'competition' && isActiveTyping && !!compMessage);
+
+  const weakKeys = Object.entries(keyErrorMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([k]) => k);
 
   return (
     <div
@@ -514,26 +596,30 @@ function App() {
               gap: 0,
             }}
           >
-            {/* Stats row */}
+            {/* Header row: live stats (while typing) or action buttons */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 24,
-                marginBottom: 28,
+                marginBottom: isAfterView ? 16 : 28,
                 paddingLeft: 2,
               }}
             >
-              <StatItem label="WPM" value={wpm} mono />
-              <StatItem label="Accuracy" value={`${accuracy}%`} mono />
-              {mode === 'training' && training && (
-                <StatItem label="Time left" value={`${training.remainingSec}s`} mono />
-              )}
-              {mode === 'training' && training && training.errors > 0 && (
-                <StatItem label="Errors" value={training.errors} />
+              {!isAfterView && (
+                <>
+                  <StatItem label="WPM" value={wpm} mono />
+                  <StatItem label="Accuracy" value={`${accuracy}%`} mono />
+                  {mode === 'training' && training && (
+                    <StatItem label="Time left" value={`${training.remainingSec}s`} mono />
+                  )}
+                  {mode === 'training' && training && training.errors > 0 && (
+                    <StatItem label="Errors" value={training.errors} />
+                  )}
+                </>
               )}
               <div style={{ flex: 1 }} />
-              {mode === 'training' && training?.lessonId === 'random' && (
+              {isAfterView && mode === 'training' && training?.lessonId === 'random' && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -551,11 +637,37 @@ function App() {
                   setTyped('');
                   setTypingStartTime(null);
                   setLessonResult(null);
+                  setWordTimestamps([]);
                 }}
               >
                 Back
               </Button>
             </div>
+
+            {/* Post-race keyboard heatmap */}
+            {isAfterView && Object.keys(keyErrorMap).length > 0 && (
+              <KeyboardHeatmap
+                errorMap={keyErrorMap}
+                target={activeTarget}
+                typed={typed}
+              />
+            )}
+
+            {/* Post-session stats dashboard */}
+            {isAfterView && (
+              <SessionStats
+                wpm={wpm}
+                burstWpm={burstWpm}
+                accuracy={accuracy}
+                elapsedMs={elapsedMs}
+                errors={lessonResult ? lessonResult.errors : totalErrors}
+                success={lessonResult?.success}
+                winner={compMessage && mode === 'competition' ? compMessage : undefined}
+                wpmTimeSeries={wpmTimeSeries}
+                wpmPerWord={wpmPerWord}
+                mode={mode}
+              />
+            )}
 
             {/* Typing text */}
             <div style={{ marginBottom: 20, minHeight: 80 }}>
@@ -567,57 +679,72 @@ function App() {
               <ProgressBar value={selectedProgress} />
             </div>
 
-            {/* Lesson result */}
-            {lessonResult && (
+            {/* Tailored practice recommendation */}
+            {isAfterView && weakKeys.length > 0 && (
               <div
                 style={{
-                  marginBottom: 24,
-                  padding: '10px 16px',
-                  borderRadius: 10,
-                  background: lessonResult.success
-                    ? 'rgba(50,200,120,0.1)'
-                    : 'rgba(220,80,60,0.1)',
-                  border: `0.5px solid ${lessonResult.success ? 'rgba(50,200,120,0.25)' : 'rgba(220,80,60,0.25)'}`,
-                  fontSize: 13,
-                  color: lessonResult.success ? 'oklch(0.72 0.14 160)' : 'oklch(0.65 0.22 25)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
+                  marginTop: 28,
+                  padding: '18px 20px',
+                  borderRadius: 14,
+                  background: 'rgba(120,80,255,0.07)',
+                  border: '0.5px solid rgba(120,80,255,0.2)',
                 }}
               >
-                <span>{lessonResult.success ? 'Lesson complete' : 'Time up'}</span>
-                <span style={{ color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                  errors: {lessonResult.errors}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: 'rgba(255,255,255,0.3)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        marginBottom: 6,
+                      }}
+                    >
+                      Tailored Practice
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
+                        Focus on:
+                      </span>
+                      {weakKeys.map((k) => (
+                        <span
+                          key={k}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 28,
+                            height: 28,
+                            borderRadius: 7,
+                            background: 'rgba(255,80,40,0.15)',
+                            border: '0.5px solid rgba(255,80,40,0.35)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: 'rgba(255,180,160,0.95)',
+                          }}
+                        >
+                          {k}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => startTargetedTraining(weakKeys)}
+                    style={{
+                      background: 'rgba(120,80,255,0.18)',
+                      border: '0.5px solid rgba(120,80,255,0.4)',
+                      color: 'rgba(200,180,255,0.95)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    Practice weak keys →
+                  </Button>
+                </div>
               </div>
             )}
-
-            {/* Competition result */}
-            {compMessage && mode === 'competition' && (
-              <div
-                style={{
-                  marginBottom: 24,
-                  padding: '10px 16px',
-                  borderRadius: 10,
-                  background: 'rgba(80,160,255,0.1)',
-                  border: '0.5px solid rgba(80,160,255,0.25)',
-                  fontSize: 13,
-                  color: 'rgba(160,200,255,0.9)',
-                }}
-              >
-                {compMessage}
-              </div>
-            )}
-
-            {/* Post-race keyboard heatmap */}
-            {(lessonResult || (compMessage && mode === 'competition')) &&
-              Object.keys(keyErrorMap).length > 0 && (
-                <KeyboardHeatmap
-                  errorMap={keyErrorMap}
-                  target={activeTarget}
-                  typed={typed}
-                />
-              )}
 
             {/* Hidden textarea */}
             <textarea
@@ -660,8 +787,8 @@ function App() {
           </div>
         )}
 
-        {/* Keyboard — always visible once joined */}
-        {joined && (
+        {/* Keyboard — visible while actively typing, hidden in after-view */}
+        {joined && !isAfterView && (
           <div
             style={{
               width: '100%',

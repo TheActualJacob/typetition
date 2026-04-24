@@ -1,5 +1,5 @@
 const { lessons } = require('../../../shared/lessons');
-const { generateRandomText } = require('../../../shared/word-pool');
+const { generateRandomText, generateTargetedText } = require('../../../shared/word-pool');
 
 function mismatchCount(source, typed) {
   let mismatches = 0;
@@ -35,6 +35,25 @@ class TrainingManager {
     const timeLimitSec = Math.max(60, wordCount * 3);
     const state = {
       lessonId: 'random',
+      text,
+      timeLimitSec,
+      startedAt: Date.now(),
+      typed: '',
+      finished: false,
+    };
+    this.sessions.set(sessionId, state);
+    return this.getSnapshot(sessionId);
+  }
+
+  startTargeted(sessionId, targetChars = [], wordCount = 30) {
+    const safeChars = Array.isArray(targetChars)
+      ? targetChars.filter((c) => typeof c === 'string' && c.length === 1).slice(0, 10)
+      : [];
+    const safeCount = Math.min(100, Math.max(10, Number(wordCount) || 30));
+    const text = generateTargetedText(safeChars, safeCount);
+    const timeLimitSec = Math.max(60, safeCount * 3);
+    const state = {
+      lessonId: 'targeted',
       text,
       timeLimitSec,
       startedAt: Date.now(),
