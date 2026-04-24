@@ -247,9 +247,14 @@ function App() {
   }
 
 
+  const myCompPlayer = useMemo(
+    () => competitionState?.players?.find((p) => p.name === name) ?? null,
+    [competitionState, name],
+  );
+
   const isActiveTyping =
     (mode === 'training' && !!training) ||
-    (mode === 'competition' && !!competitionState?.started);
+    (mode === 'competition' && !!competitionState?.started && !myCompPlayer?.finished);
 
   // Keep refs in sync so keydown handler always has current values
   useEffect(() => { isActiveTypingRef.current = isActiveTyping; }, [isActiveTyping]);
@@ -258,7 +263,7 @@ function App() {
 
   const isAfterView =
     (mode === 'training' && !!lessonResult) ||
-    (mode === 'competition' && isActiveTyping && !!compMessage);
+    (mode === 'competition' && !!myCompPlayer?.finished);
 
   const weakKeys = Object.entries(keyErrorMap)
     .sort((a, b) => b[1] - a[1])
@@ -691,15 +696,94 @@ function App() {
               />
             )}
 
+            {/* Competition leaderboard (after-view) */}
+            {isAfterView && mode === 'competition' && competitionState?.players?.length > 0 && (
+              <CompetitionLeaderboard
+                players={competitionState.players}
+                myName={name}
+                winner={competitionState.winner}
+              />
+            )}
+
             {/* Typing text */}
             <div style={{ marginBottom: 20, minHeight: 80 }}>
               <TypingTextPanel target={activeTarget} typed={typed} />
             </div>
 
             {/* Progress bar */}
-            <div style={{ marginBottom: 32 }}>
+            <div style={{ marginBottom: mode === 'competition' ? 16 : 32 }}>
               <ProgressBar value={selectedProgress} />
             </div>
+
+            {/* Live racer progress — competition only */}
+            {mode === 'competition' && competitionState?.players?.length > 1 && (
+              <div style={{ marginBottom: 32 }}>
+                {competitionState.players
+                  .slice()
+                  .sort((a, b) => b.progress - a.progress)
+                  .map((player) => (
+                    <div
+                      key={player.sessionId}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-sans)',
+                          fontSize: 12,
+                          color: player.name === name ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)',
+                          minWidth: 80,
+                          maxWidth: 120,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          fontWeight: player.name === name ? 600 : 400,
+                        }}
+                      >
+                        {player.name === name ? 'You' : player.name}
+                      </span>
+                      <div
+                        style={{
+                          flex: 1,
+                          height: 4,
+                          borderRadius: 2,
+                          background: 'rgba(255,255,255,0.06)',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: '100%',
+                            borderRadius: 2,
+                            width: `${player.progress}%`,
+                            background: player.name === name
+                              ? 'oklch(0.65 0.18 240)'
+                              : player.finished
+                              ? 'oklch(0.72 0.14 160)'
+                              : 'rgba(255,255,255,0.25)',
+                            transition: 'width 0.3s ease-out',
+                          }}
+                        />
+                      </div>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 11,
+                          color: 'rgba(255,255,255,0.3)',
+                          minWidth: 36,
+                          textAlign: 'right',
+                        }}
+                      >
+                        {player.finished ? '✓' : `${player.progress}%`}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
 
             {/* Tailored practice recommendation */}
             {isAfterView && weakKeys.length > 0 && (
@@ -821,6 +905,91 @@ function StatItem({ label, value, mono }) {
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+function CompetitionLeaderboard({ players, myName, winner }) {
+  const sorted = [...players].sort((a, b) => {
+    if (a.finished && b.finished) return (a.elapsedMs ?? Infinity) - (b.elapsedMs ?? Infinity);
+    if (a.finished) return -1;
+    if (b.finished) return 1;
+    return b.progress - a.progress;
+  });
+
+  const medals = ['🥇', '🥈', '🥉'];
+
+  return (
+    <div
+      style={{
+        marginTop: 24,
+        marginBottom: 24,
+        borderRadius: 14,
+        border: '0.5px solid rgba(255,255,255,0.08)',
+        background: 'rgba(255,255,255,0.03)',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          padding: '12px 16px',
+          borderBottom: '0.5px solid rgba(255,255,255,0.06)',
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'rgba(255,255,255,0.3)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+        }}
+      >
+        Final Standings
+      </div>
+      {sorted.map((player, i) => {
+        const isMe = player.name === myName;
+        const place = i + 1;
+        const medal = medals[i] ?? `${place}.`;
+        return (
+          <div
+            key={player.sessionId}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '12px 16px',
+              gap: 12,
+              borderTop: i > 0 ? '0.5px solid rgba(255,255,255,0.05)' : 'none',
+              background: isMe ? 'rgba(80,160,255,0.06)' : 'transparent',
+            }}
+          >
+            <span style={{ fontSize: 16, minWidth: 24 }}>{medal}</span>
+            <span
+              style={{
+                flex: 1,
+                fontSize: 14,
+                fontWeight: isMe ? 600 : 400,
+                color: isMe ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.55)',
+              }}
+            >
+              {player.name}{isMe ? ' (you)' : ''}
+            </span>
+            <div style={{ textAlign: 'right' }}>
+              {player.finished ? (
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 13,
+                    color: player.validFinish ? 'oklch(0.72 0.14 160)' : 'rgba(255,255,255,0.35)',
+                  }}
+                >
+                  {player.elapsedMs ? `${(player.elapsedMs / 1000).toFixed(2)}s` : 'DNF'}
+                </span>
+              ) : (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>
+                  {player.progress}%
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

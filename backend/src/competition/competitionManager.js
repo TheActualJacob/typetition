@@ -94,6 +94,7 @@ class CompetitionManager {
         errors: player.errors,
         finished: Boolean(player.finishedAt),
         validFinish: player.validFinish,
+        elapsedMs: player.finishedAt ? player.finishedAt - this.startedAt : null,
       })),
     };
   }
