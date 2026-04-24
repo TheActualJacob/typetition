@@ -109,10 +109,16 @@ wss.on('connection', (ws) => {
     if (msg.type === ClientEvent.JOIN_COMPETITION) {
       const result = competitionManager.join(client.sessionId, client.name);
       if (!result.ok) {
-        send(ws, ServerEvent.COMPETITION_FULL, { message: 'Competition room is full.' });
+        send(ws, ServerEvent.COMPETITION_FULL, { message: 'Competition room is full or already started.' });
         return;
       }
       broadcastCompetitionState();
+      return;
+    }
+
+    if (msg.type === ClientEvent.START_COMPETITION) {
+      const started = competitionManager.startRace(client.sessionId);
+      if (started) broadcastCompetitionState();
       return;
     }
 

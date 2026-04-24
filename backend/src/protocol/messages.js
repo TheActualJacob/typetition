@@ -15,6 +15,7 @@ const ClientEvent = {
   START_RANDOM_TRAINING: 'start_random_training',
   TRAINING_INPUT: 'training_input',
   JOIN_COMPETITION: 'join_competition',
+  START_COMPETITION: 'start_competition',
   COMPETITION_INPUT: 'competition_input',
   LEAVE_COMPETITION: 'leave_competition',
 };

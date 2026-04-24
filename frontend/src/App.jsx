@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ProgressBar } from './components/ProgressBar';
 import { TypingTextPanel } from './components/TypingTextPanel';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
+import { KeyboardHeatmap } from './components/KeyboardHeatmap';
 import { createSocketClient } from './ws/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +44,7 @@ function App() {
   const [competitionState, setCompetitionState] = useState(null);
   const [compMessage, setCompMessage] = useState('');
   const [pressedKeys, setPressedKeys] = useState([]);
+  const [keyErrorMap, setKeyErrorMap] = useState({});
   const [typed, setTyped] = useState('');
   const [typingStartTime, setTypingStartTime] = useState(null);
   const socketRef = useRef(null);
@@ -110,6 +112,7 @@ function App() {
     setTyped('');
     setLessonResult(null);
     setTypingStartTime(null);
+    setKeyErrorMap({});
     socketRef.current?.send('start_training', { lessonId });
     setTimeout(() => textareaRef.current?.focus(), 100);
   }
@@ -118,6 +121,7 @@ function App() {
     setTyped('');
     setLessonResult(null);
     setTypingStartTime(null);
+    setKeyErrorMap({});
     socketRef.current?.send('start_random_training', { wordCount });
     setTimeout(() => textareaRef.current?.focus(), 100);
   }
@@ -126,13 +130,27 @@ function App() {
     setCompMessage('');
     setTyped('');
     setTypingStartTime(null);
+    setKeyErrorMap({});
     socketRef.current?.send('join_competition');
     setTimeout(() => textareaRef.current?.focus(), 100);
+  }
+
+  function startCompetition() {
+    socketRef.current?.send('start_competition');
   }
 
   function handleTyping(value) {
     if (!typingStartTime && value.length === 1) {
       setTypingStartTime(Date.now());
+    }
+    if (value.length > typed.length) {
+      const idx = value.length - 1;
+      const expected = activeTarget[idx];
+      const actual = value[idx];
+      if (expected && actual !== expected) {
+        const k = expected.toLowerCase();
+        setKeyErrorMap((prev) => ({ ...prev, [k]: (prev[k] ?? 0) + 1 }));
+      }
     }
     setTyped(value);
     if (mode === 'training') socketRef.current?.send('training_input', { typed: value });
@@ -396,71 +414,94 @@ function App() {
         )}
 
         {/* Competition lobby */}
-        {mode === 'competition' && !competitionState?.started && (
-          <Card
-            className="animate-fade-in"
-            style={{ width: '100%', maxWidth: 480, marginBottom: 24 }}
-          >
-            <CardHeader>
-              <CardTitle>Competition Room</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: 16,
-                }}
-              >
-                <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
-                  Players: {competitionState?.count ?? 0} / {competitionState?.capacity ?? 5}
-                </span>
-                <Button variant="ghost" size="sm" onClick={() => setMode(null)}>
-                  Back
-                </Button>
-              </div>
-              <Button style={{ width: '100%' }} onClick={joinCompetition}>
-                Join Race
-              </Button>
-              {compMessage && (
-                <p
+        {mode === 'competition' && !competitionState?.started && (() => {
+          const isInRoom = competitionState?.players?.some((p) => p.name === name);
+          return (
+            <Card
+              className="animate-fade-in"
+              style={{ width: '100%', maxWidth: 480, marginBottom: 24 }}
+            >
+              <CardHeader>
+                <CardTitle>Competition Room</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div
                   style={{
-                    marginTop: 12,
-                    fontSize: 13,
-                    color: 'rgba(255,255,255,0.5)',
-                    textAlign: 'center',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 16,
                   }}
                 >
-                  {compMessage}
-                </p>
-              )}
-              {!!competitionState?.players?.length && (
-                <ul style={{ marginTop: 16, listStyle: 'none', padding: 0, margin: '16px 0 0' }}>
-                  {competitionState.players.map((player, i) => (
-                    <li
-                      key={player.sessionId}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '8px 0',
-                        borderTop: i > 0 ? '0.5px solid rgba(255,255,255,0.06)' : 'none',
-                        fontSize: 13,
-                        color: player.name === name ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.45)',
+                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
+                    Players: {competitionState?.count ?? 0} / {competitionState?.capacity ?? 5}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => setMode(null)}>
+                    Back
+                  </Button>
+                </div>
+                {!isInRoom ? (
+                  <Button style={{ width: '100%' }} onClick={joinCompetition}>
+                    Join Race
+                  </Button>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button
+                      style={{ flex: 1 }}
+                      onClick={startCompetition}
+                      disabled={!competitionState?.count}
+                    >
+                      Start Race
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        socketRef.current?.send('leave_competition');
                       }}
                     >
-                      <span>{player.name}</span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                        {player.progress}%{player.finished ? ' ✓' : ''}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        )}
+                      Leave
+                    </Button>
+                  </div>
+                )}
+                {compMessage && (
+                  <p
+                    style={{
+                      marginTop: 12,
+                      fontSize: 13,
+                      color: 'rgba(255,255,255,0.5)',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {compMessage}
+                  </p>
+                )}
+                {!!competitionState?.players?.length && (
+                  <ul style={{ marginTop: 16, listStyle: 'none', padding: 0, margin: '16px 0 0' }}>
+                    {competitionState.players.map((player, i) => (
+                      <li
+                        key={player.sessionId}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 0',
+                          borderTop: i > 0 ? '0.5px solid rgba(255,255,255,0.06)' : 'none',
+                          fontSize: 13,
+                          color: player.name === name ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.45)',
+                        }}
+                      >
+                        <span>{player.name}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                          {player.progress}%{player.finished ? ' ✓' : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Active typing area */}
         {isActiveTyping && (
@@ -567,6 +608,16 @@ function App() {
                 {compMessage}
               </div>
             )}
+
+            {/* Post-race keyboard heatmap */}
+            {(lessonResult || (compMessage && mode === 'competition')) &&
+              Object.keys(keyErrorMap).length > 0 && (
+                <KeyboardHeatmap
+                  errorMap={keyErrorMap}
+                  target={activeTarget}
+                  typed={typed}
+                />
+              )}
 
             {/* Hidden textarea */}
             <textarea

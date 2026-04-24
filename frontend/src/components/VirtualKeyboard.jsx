@@ -1,16 +1,16 @@
 import { motion } from 'framer-motion';
 
-const ROWS = [
+export const ROWS = [
   { keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'], indent: 0 },
   { keys: ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'], indent: 0.5 },
   { keys: ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';'], indent: 1 },
   { keys: ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/'], indent: 1.5 },
 ];
 
-const KEY_SIZE = 44;
-const KEY_GAP = 6;
-const UNIT = KEY_SIZE + KEY_GAP;
-const PANEL_PADDING = 20;
+export const KEY_SIZE = 44;
+export const KEY_GAP = 6;
+export const UNIT = KEY_SIZE + KEY_GAP;
+export const PANEL_PADDING = 20;
 
 const totalWidth = 10 * KEY_SIZE + 9 * KEY_GAP;
 const maxIndent = 1.5;

@@ -24,7 +24,7 @@ class CompetitionManager {
   }
 
   canJoin() {
-    return this.count < ROOM_CAPACITY;
+    return this.count < ROOM_CAPACITY && !this.started;
   }
 
   join(sessionId, name) {
@@ -40,12 +40,15 @@ class CompetitionManager {
       validFinish: false,
     });
 
-    if (this.count === ROOM_CAPACITY && !this.started) {
-      this.started = true;
-      this.startedAt = Date.now();
-      this.text = raceTexts[Math.floor(Math.random() * raceTexts.length)];
-    }
     return { ok: true };
+  }
+
+  startRace(sessionId) {
+    if (this.started || !this.players.has(sessionId) || this.count === 0) return false;
+    this.started = true;
+    this.startedAt = Date.now();
+    this.text = raceTexts[Math.floor(Math.random() * raceTexts.length)];
+    return true;
   }
 
   leave(sessionId) {
