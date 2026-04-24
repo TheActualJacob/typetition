@@ -423,19 +423,21 @@ function RacerLane({ player, color, rank }) {
           position: 'relative',
         }}
       >
-        <motion.div
-          animate={{ width: `${player.progress}%` }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
+        <div
           style={{
             position: 'absolute',
             left: 0,
             top: 0,
             bottom: 0,
+            right: 0,
             borderRadius: 9,
             background: player.finished
               ? `linear-gradient(90deg, ${color.bar}, ${color.bar}cc)`
               : `linear-gradient(90deg, ${color.bar}99, ${color.bar}dd)`,
             boxShadow: player.finished ? `0 0 16px ${color.glow}` : 'none',
+            transform: `scaleX(${player.progress / 100})`,
+            transformOrigin: 'left center',
+            transition: 'transform 0.35s ease-out, box-shadow 0.3s ease',
           }}
         />
       </div>

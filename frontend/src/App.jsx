@@ -612,98 +612,24 @@ function App() {
           );
         })()}
 
-        {/* Active typing area */}
+        {/* ── ACTIVE TYPING ── shown while the player is still racing */}
         {isActiveTyping && (
-          <div
-            className="animate-fade-in"
-            style={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 0,
-            }}
-          >
-            {/* Header row: live stats (while typing) or action buttons */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 24,
-                marginBottom: isAfterView ? 16 : 28,
-                paddingLeft: 2,
-              }}
-            >
-              {!isAfterView && (
-                <>
-                  <StatItem label="WPM" value={wpm} mono />
-                  <StatItem label="Accuracy" value={`${accuracy}%`} mono />
-                  {mode === 'training' && training && (
-                    <StatItem label="Time left" value={`${training.remainingSec}s`} mono />
-                  )}
-                  {mode === 'training' && training && training.errors > 0 && (
-                    <StatItem label="Errors" value={training.errors} />
-                  )}
-                </>
+          <div className="animate-fade-in" style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+            {/* Live stats bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 28, paddingLeft: 2 }}>
+              <StatItem label="WPM" value={wpm} mono />
+              <StatItem label="Accuracy" value={`${accuracy}%`} mono />
+              {mode === 'training' && training && (
+                <StatItem label="Time left" value={`${training.remainingSec}s`} mono />
+              )}
+              {mode === 'training' && training && training.errors > 0 && (
+                <StatItem label="Errors" value={training.errors} />
               )}
               <div style={{ flex: 1 }} />
-              {isAfterView && mode === 'training' && training?.lessonId === 'random' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => startRandomTraining(training.text.split(' ').length)}
-                >
-                  Retry
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setMode(null);
-                  setTraining(null);
-                  setTyped('');
-                  setTypingStartTime(null);
-                  setLessonResult(null);
-                  setWordTimestamps([]);
-                }}
-              >
+              <Button variant="ghost" size="sm" onClick={() => { setMode(null); setTraining(null); setTyped(''); setTypingStartTime(null); setLessonResult(null); setWordTimestamps([]); }}>
                 Back
               </Button>
             </div>
-
-            {/* Post-race keyboard heatmap */}
-            {isAfterView && Object.keys(keyErrorMap).length > 0 && (
-              <KeyboardHeatmap
-                errorMap={keyErrorMap}
-                target={activeTarget}
-                typed={typed}
-              />
-            )}
-
-            {/* Post-session stats dashboard */}
-            {isAfterView && (
-              <SessionStats
-                wpm={wpm}
-                burstWpm={burstWpm}
-                accuracy={accuracy}
-                elapsedMs={elapsedMs}
-                errors={lessonResult ? lessonResult.errors : totalErrors}
-                success={lessonResult?.success}
-                winner={compMessage && mode === 'competition' ? compMessage : undefined}
-                wpmTimeSeries={wpmTimeSeries}
-                wpmPerWord={wpmPerWord}
-                mode={mode}
-              />
-            )}
-
-            {/* Competition leaderboard (after-view) */}
-            {isAfterView && mode === 'competition' && competitionState?.players?.length > 0 && (
-              <CompetitionLeaderboard
-                players={competitionState.players}
-                myName={name}
-                winner={competitionState.winner}
-              />
-            )}
 
             {/* Typing text */}
             <div style={{ marginBottom: 20, minHeight: 80 }}>
@@ -715,162 +641,100 @@ function App() {
               <ProgressBar value={selectedProgress} />
             </div>
 
-            {/* Live racer progress — competition only */}
+            {/* Live racer lanes — competition only */}
             {mode === 'competition' && competitionState?.players?.length > 1 && (
-              <div style={{ marginBottom: 32 }}>
-                {competitionState.players
-                  .slice()
-                  .sort((a, b) => b.progress - a.progress)
-                  .map((player) => (
-                    <div
-                      key={player.sessionId}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        marginBottom: 8,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-sans)',
-                          fontSize: 12,
-                          color: player.name === name ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)',
-                          minWidth: 80,
-                          maxWidth: 120,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          fontWeight: player.name === name ? 600 : 400,
-                        }}
-                      >
-                        {player.name === name ? 'You' : player.name}
-                      </span>
-                      <div
-                        style={{
-                          flex: 1,
-                          height: 4,
-                          borderRadius: 2,
-                          background: 'rgba(255,255,255,0.06)',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: '100%',
-                            borderRadius: 2,
-                            width: `${player.progress}%`,
-                            background: player.name === name
-                              ? 'oklch(0.65 0.18 240)'
-                              : player.finished
-                              ? 'oklch(0.72 0.14 160)'
-                              : 'rgba(255,255,255,0.25)',
-                            transition: 'width 0.3s ease-out',
-                          }}
-                        />
-                      </div>
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 11,
-                          color: 'rgba(255,255,255,0.3)',
-                          minWidth: 36,
-                          textAlign: 'right',
-                        }}
-                      >
-                        {player.finished ? '✓' : `${player.progress}%`}
-                      </span>
+              <RacerProgressList players={competitionState.players} myName={name} />
+            )}
+          </div>
+        )}
+
+        {/* ── AFTER-VIEW ── shown once the player finishes (or training ends) */}
+        {isAfterView && (
+          <div className="animate-fade-in" style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+
+            {/* Action bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
+              {mode === 'training' && training?.lessonId === 'random' && (
+                <Button variant="outline" size="sm" onClick={() => startRandomTraining(training.text.split(' ').length)}>
+                  Retry
+                </Button>
+              )}
+              <div style={{ flex: 1 }} />
+              <Button variant="ghost" size="sm" onClick={() => { setMode(null); setTraining(null); setTyped(''); setTypingStartTime(null); setLessonResult(null); setWordTimestamps([]); }}>
+                Back
+              </Button>
+            </div>
+
+            {/* Heatmap */}
+            {Object.keys(keyErrorMap).length > 0 && (
+              <KeyboardHeatmap errorMap={keyErrorMap} target={activeTarget} typed={typed} />
+            )}
+
+            {/* Stats dashboard */}
+            <SessionStats
+              wpm={wpm}
+              burstWpm={burstWpm}
+              accuracy={accuracy}
+              elapsedMs={elapsedMs}
+              errors={lessonResult ? lessonResult.errors : totalErrors}
+              success={lessonResult?.success}
+              winner={compMessage && mode === 'competition' ? compMessage : undefined}
+              wpmTimeSeries={wpmTimeSeries}
+              wpmPerWord={wpmPerWord}
+              mode={mode}
+            />
+
+            {/* Competition: live others-still-racing view + final leaderboard */}
+            {mode === 'competition' && competitionState?.players?.length > 0 && (
+              <>
+                {/* Others still racing */}
+                {!competitionState.players.every(p => p.finished) && (
+                  <div style={{ marginTop: 24, marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                      Others still racing
                     </div>
-                  ))}
-              </div>
+                    <RacerProgressList players={competitionState.players} myName={name} />
+                  </div>
+                )}
+                {/* Full leaderboard */}
+                <CompetitionLeaderboard
+                  players={competitionState.players}
+                  myName={name}
+                  winner={competitionState.winner}
+                />
+              </>
             )}
 
             {/* Tailored practice recommendation */}
-            {isAfterView && weakKeys.length > 0 && (
-              <div
-                style={{
-                  marginTop: 28,
-                  padding: '18px 20px',
-                  borderRadius: 14,
-                  background: 'rgba(120,80,255,0.07)',
-                  border: '0.5px solid rgba(120,80,255,0.2)',
-                }}
-              >
+            {weakKeys.length > 0 && (
+              <div style={{ marginTop: 28, padding: '18px 20px', borderRadius: 14, background: 'rgba(120,80,255,0.07)', border: '0.5px solid rgba(120,80,255,0.2)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                   <div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 500,
-                        color: 'rgba(255,255,255,0.3)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        marginBottom: 6,
-                      }}
-                    >
+                    <div style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
                       Tailored Practice
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
-                        Focus on:
-                      </span>
+                      <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>Focus on:</span>
                       {weakKeys.map((k) => (
-                        <span
-                          key={k}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: 28,
-                            height: 28,
-                            borderRadius: 7,
-                            background: 'rgba(255,80,40,0.15)',
-                            border: '0.5px solid rgba(255,80,40,0.35)',
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: 'rgba(255,180,160,0.95)',
-                          }}
-                        >
+                        <span key={k} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, background: 'rgba(255,80,40,0.15)', border: '0.5px solid rgba(255,80,40,0.35)', fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: 'rgba(255,180,160,0.95)' }}>
                           {k}
                         </span>
                       ))}
                     </div>
                   </div>
-                  <Button
-                    onClick={() => startTargetedTraining(weakKeys)}
-                    style={{
-                      background: 'rgba(120,80,255,0.18)',
-                      border: '0.5px solid rgba(120,80,255,0.4)',
-                      color: 'rgba(200,180,255,0.95)',
-                      flexShrink: 0,
-                    }}
-                  >
+                  <Button onClick={() => startTargetedTraining(weakKeys)} style={{ background: 'rgba(120,80,255,0.18)', border: '0.5px solid rgba(120,80,255,0.4)', color: 'rgba(200,180,255,0.95)', flexShrink: 0 }}>
                     Practice weak keys →
                   </Button>
                 </div>
               </div>
             )}
-
           </div>
         )}
 
-        {/* Keyboard — visible while actively typing, hidden in after-view */}
+        {/* ── KEYBOARD ── shown only while actively typing, not in after-view */}
         {joined && !isAfterView && (
-          <div
-            style={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 0,
-              marginTop: isActiveTyping ? 0 : 32,
-            }}
-          >
-            {!isActiveTyping && (
-              <div style={{ marginBottom: 20 }}>
-                <ProgressBar value={selectedProgress} />
-              </div>
-            )}
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', marginTop: isActiveTyping ? 0 : 32 }}>
+            {!isActiveTyping && <div style={{ marginBottom: 20 }}><ProgressBar value={selectedProgress} /></div>}
             <VirtualKeyboard pressedKeys={pressedKeys} />
           </div>
         )}
@@ -905,6 +769,31 @@ function StatItem({ label, value, mono }) {
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+function RacerProgressList({ players, myName }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      {[...players]
+        .sort((a, b) => b.progress - a.progress)
+        .map((player) => {
+          const isMe = player.name === myName;
+          return (
+            <div key={player.sessionId} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: isMe ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)', minWidth: 80, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: isMe ? 600 : 400 }}>
+                {isMe ? 'You' : player.name}
+              </span>
+              <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: 2, width: `${player.progress}%`, background: isMe ? 'oklch(0.65 0.18 240)' : player.finished ? 'oklch(0.72 0.14 160)' : 'rgba(255,255,255,0.25)', transition: 'width 0.3s ease-out' }} />
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255,255,255,0.3)', minWidth: 36, textAlign: 'right' }}>
+                {player.finished ? '✓' : `${player.progress}%`}
+              </span>
+            </div>
+          );
+        })}
     </div>
   );
 }
