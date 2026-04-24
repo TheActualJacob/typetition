@@ -8,8 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-const DEFAULT_BACKEND_ORIGIN = window.location.origin;
-const DEFAULT_WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://typetition-ws.trex.gr`;
+const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const DEFAULT_BACKEND_ORIGIN = isLocalhost ? 'http://localhost:3001' : window.location.origin;
+const DEFAULT_WS_URL = isLocalhost
+  ? 'ws://localhost:3001'
+  : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://typetition-ws.trex.gr`;
 const BACKEND_HTTP_URL = import.meta.env.VITE_BACKEND_ORIGIN || DEFAULT_BACKEND_ORIGIN;
 const WS_URL = import.meta.env.VITE_WS_URL || DEFAULT_WS_URL;
 
