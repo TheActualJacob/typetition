@@ -111,6 +111,14 @@ function App() {
     setTimeout(() => textareaRef.current?.focus(), 100);
   }
 
+  function startRandomTraining(wordCount = 30) {
+    setTyped('');
+    setLessonResult(null);
+    setTypingStartTime(null);
+    socketRef.current?.send('start_random_training', { wordCount });
+    setTimeout(() => textareaRef.current?.focus(), 100);
+  }
+
   function joinCompetition() {
     setCompMessage('');
     setTyped('');
@@ -268,11 +276,79 @@ function App() {
                   letterSpacing: '0.08em',
                 }}
               >
-                Select a lesson
+                Practice
               </span>
               <Button variant="ghost" size="sm" onClick={() => setMode(null)}>
                 Back
               </Button>
+            </div>
+
+            {/* Random text section */}
+            <div
+              style={{
+                marginBottom: 20,
+                padding: '16px 18px',
+                borderRadius: 12,
+                background: 'rgba(80,160,255,0.06)',
+                border: '0.5px solid rgba(80,160,255,0.18)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.85)', marginBottom: 3 }}>
+                    Random words
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
+                    Fresh random text every time
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {[15, 30, 50, 75].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => startRandomTraining(n)}
+                      style={{
+                        background: 'rgba(80,160,255,0.12)',
+                        border: '0.5px solid rgba(80,160,255,0.3)',
+                        borderRadius: 8,
+                        padding: '6px 14px',
+                        color: 'rgba(160,200,255,0.9)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(80,160,255,0.22)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(80,160,255,0.12)'; }}
+                    >
+                      {n}w
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Structured lessons */}
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                color: 'rgba(255,255,255,0.3)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                marginBottom: 10,
+              }}
+            >
+              Lessons
             </div>
             <div
               style={{
@@ -413,6 +489,15 @@ function App() {
                 <StatItem label="Errors" value={training.errors} />
               )}
               <div style={{ flex: 1 }} />
+              {mode === 'training' && training?.lessonId === 'random' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => startRandomTraining(training.text.split(' ').length)}
+                >
+                  Retry
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

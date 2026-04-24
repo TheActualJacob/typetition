@@ -90,6 +90,13 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (msg.type === ClientEvent.START_RANDOM_TRAINING) {
+      const wordCount = Math.min(100, Math.max(10, Number(msg.payload?.wordCount ?? 30)));
+      const snapshot = trainingManager.startRandom(client.sessionId, wordCount);
+      send(ws, ServerEvent.TRAINING_STATE, snapshot);
+      return;
+    }
+
     if (msg.type === ClientEvent.TRAINING_INPUT) {
       const typed = String(msg.payload?.typed || '');
       const output = trainingManager.updateInput(client.sessionId, typed);

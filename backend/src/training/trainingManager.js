@@ -1,4 +1,5 @@
 const { lessons } = require('../../../shared/lessons');
+const { generateRandomText } = require('../../../shared/word-pool');
 
 function mismatchCount(source, typed) {
   let mismatches = 0;
@@ -21,6 +22,21 @@ class TrainingManager {
       lessonId: lesson.id,
       text: lesson.prompt,
       timeLimitSec: lesson.timeLimitSec,
+      startedAt: Date.now(),
+      typed: '',
+      finished: false,
+    };
+    this.sessions.set(sessionId, state);
+    return this.getSnapshot(sessionId);
+  }
+
+  startRandom(sessionId, wordCount = 30) {
+    const text = generateRandomText(wordCount);
+    const timeLimitSec = Math.max(60, wordCount * 3);
+    const state = {
+      lessonId: 'random',
+      text,
+      timeLimitSec,
       startedAt: Date.now(),
       typed: '',
       finished: false,

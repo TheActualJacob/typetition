@@ -12,6 +12,7 @@ const ServerEvent = {
 const ClientEvent = {
   JOIN: 'join',
   START_TRAINING: 'start_training',
+  START_RANDOM_TRAINING: 'start_random_training',
   TRAINING_INPUT: 'training_input',
   JOIN_COMPETITION: 'join_competition',
   COMPETITION_INPUT: 'competition_input',
