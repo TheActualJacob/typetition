@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ProgressBar } from './components/ProgressBar';
 import { TypingTextPanel } from './components/TypingTextPanel';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
+import { DinoRaceList } from './components/DinoRaceTrack';
 import { KeyboardHeatmap } from './components/KeyboardHeatmap';
 import { SessionStats } from './components/SessionStats';
 import { createSocketClient } from './ws/client';
@@ -643,7 +644,7 @@ function App() {
 
             {/* Live racer lanes — competition only */}
             {mode === 'competition' && competitionState?.players?.length > 1 && (
-              <RacerProgressList players={competitionState.players} myName={name} />
+              <DinoRaceList players={competitionState.players} myName={name} compact />
             )}
           </div>
         )}
@@ -693,7 +694,7 @@ function App() {
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
                       Others still racing
                     </div>
-                    <RacerProgressList players={competitionState.players} myName={name} />
+                    <DinoRaceList players={competitionState.players} myName={name} compact />
                   </div>
                 )}
                 {/* Full leaderboard */}
@@ -769,31 +770,6 @@ function StatItem({ label, value, mono }) {
       >
         {value}
       </span>
-    </div>
-  );
-}
-
-function RacerProgressList({ players, myName }) {
-  return (
-    <div style={{ marginBottom: 8 }}>
-      {[...players]
-        .sort((a, b) => b.progress - a.progress)
-        .map((player) => {
-          const isMe = player.name === myName;
-          return (
-            <div key={player.sessionId} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: isMe ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)', minWidth: 80, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: isMe ? 600 : 400 }}>
-                {isMe ? 'You' : player.name}
-              </span>
-              <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', borderRadius: 2, width: `${player.progress}%`, background: isMe ? 'oklch(0.65 0.18 240)' : player.finished ? 'oklch(0.72 0.14 160)' : 'rgba(255,255,255,0.25)', transition: 'width 0.3s ease-out' }} />
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255,255,255,0.3)', minWidth: 36, textAlign: 'right' }}>
-                {player.finished ? '✓' : `${player.progress}%`}
-              </span>
-            </div>
-          );
-        })}
     </div>
   );
 }

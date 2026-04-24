@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DinoTrack, getPlayerColor } from './DinoRaceTrack';
 
 const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const WS_URL = import.meta.env.VITE_WS_URL ?? (
@@ -10,17 +11,13 @@ const WS_URL = import.meta.env.VITE_WS_URL ?? (
 
 const RACE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 
-const LANE_COLORS = [
-  { bar: 'oklch(0.65 0.18 240)',  glow: 'rgba(80,160,255,0.35)',  text: 'rgba(160,200,255,0.9)' },
-  { bar: 'oklch(0.72 0.18 160)',  glow: 'rgba(60,200,120,0.35)',  text: 'rgba(140,220,170,0.9)' },
-  { bar: 'oklch(0.72 0.20 55)',   glow: 'rgba(240,160,50,0.35)',  text: 'rgba(255,210,130,0.9)' },
-  { bar: 'oklch(0.68 0.20 310)',  glow: 'rgba(200,80,220,0.35)',  text: 'rgba(230,170,255,0.9)' },
-  { bar: 'oklch(0.68 0.22 25)',   glow: 'rgba(240,80,60,0.35)',   text: 'rgba(255,170,155,0.9)' },
+const RESULT_COLORS = [
+  { text: 'rgba(160,200,255,0.9)' },
+  { text: 'rgba(140,220,170,0.9)' },
+  { text: 'rgba(255,210,130,0.9)' },
+  { text: 'rgba(230,170,255,0.9)' },
+  { text: 'rgba(255,170,155,0.9)' },
 ];
-
-function getColor(index) {
-  return LANE_COLORS[index % LANE_COLORS.length];
-}
 
 export function DemoView() {
   const [compState, setCompState] = useState(null);
@@ -239,16 +236,19 @@ export function DemoView() {
               >
                 Race in progress · {players.filter(p => p.finished).length}/{players.length} finished
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {racingPlayers.map((player, i) => {
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {racingPlayers.map((player) => {
                   const originalIndex = players.findIndex(p => p.sessionId === player.sessionId);
-                  const color = getColor(originalIndex);
+                  const color = getPlayerColor(originalIndex);
                   return (
-                    <RacerLane
+                    <DinoTrack
                       key={player.sessionId}
-                      player={player}
+                      name={player.name}
+                      progress={player.progress}
+                      isMe={false}
                       color={color}
-                      rank={i + 1}
+                      finished={player.finished}
+                      compact={false}
                     />
                   );
                 })}
@@ -305,7 +305,8 @@ export function DemoView() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {sortedForResults.map((player, i) => {
                   const originalIndex = players.findIndex(p => p.sessionId === player.sessionId);
-                  const color = getColor(originalIndex);
+                  const color = getPlayerColor(originalIndex);
+                  const textColor = RESULT_COLORS[originalIndex % RESULT_COLORS.length].text;
                   const medals = ['🥇', '🥈', '🥉'];
                   const medal = medals[i] ?? `${i + 1}.`;
                   return (
@@ -320,50 +321,26 @@ export function DemoView() {
                         gap: 20,
                         padding: '18px 28px',
                         borderRadius: 14,
-                        border: `0.5px solid ${i === 0 ? color.bar + '50' : 'rgba(255,255,255,0.06)'}`,
-                        background: i === 0 ? `${color.bar}0d` : 'rgba(255,255,255,0.02)',
+                        border: `0.5px solid ${i === 0 ? color + '50' : 'rgba(255,255,255,0.06)'}`,
+                        background: i === 0 ? `${color}14` : 'rgba(255,255,255,0.02)',
                       }}
                     >
                       <span style={{ fontSize: 26, minWidth: 36 }}>{medal}</span>
-                      <span
-                        style={{
-                          flex: 1,
-                          fontSize: 20,
-                          fontWeight: 600,
-                          color: color.text,
-                          letterSpacing: '-0.01em',
-                        }}
-                      >
+                      <span style={{ fontSize: 20, fontWeight: 600, color: textColor, letterSpacing: '-0.01em', flex: 1 }}>
                         {player.name}
                       </span>
                       <div style={{ textAlign: 'right' }}>
                         {player.finished && player.elapsedMs ? (
                           <>
-                            <div
-                              style={{
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: 22,
-                                fontWeight: 700,
-                                color: player.validFinish ? color.text : 'rgba(255,255,255,0.2)',
-                                letterSpacing: '-0.02em',
-                              }}
-                            >
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: player.validFinish ? textColor : 'rgba(255,255,255,0.2)', letterSpacing: '-0.02em' }}>
                               {(player.elapsedMs / 1000).toFixed(2)}s
                             </div>
                             {!player.validFinish && (
-                              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 2 }}>
-                                invalid finish
-                              </div>
+                              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 2 }}>invalid finish</div>
                             )}
                           </>
                         ) : (
-                          <div
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: 18,
-                              color: 'rgba(255,255,255,0.2)',
-                            }}
-                          >
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: 'rgba(255,255,255,0.2)' }}>
                             {player.progress}%
                           </div>
                         )}
@@ -380,90 +357,6 @@ export function DemoView() {
   );
 }
 
-function RacerLane({ player, color, rank }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-      {/* Rank */}
-      <span
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 13,
-          color: 'rgba(255,255,255,0.2)',
-          minWidth: 20,
-          textAlign: 'right',
-        }}
-      >
-        {rank}
-      </span>
-
-      {/* Name */}
-      <span
-        style={{
-          fontSize: 15,
-          fontWeight: 600,
-          color: player.finished ? color.text : 'rgba(255,255,255,0.7)',
-          minWidth: 140,
-          maxWidth: 140,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {player.name}
-      </span>
-
-      {/* Progress track */}
-      <div
-        style={{
-          flex: 1,
-          height: 18,
-          borderRadius: 9,
-          background: 'rgba(255,255,255,0.05)',
-          overflow: 'hidden',
-          position: 'relative',
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            bottom: 0,
-            right: 0,
-            borderRadius: 9,
-            background: player.finished
-              ? `linear-gradient(90deg, ${color.bar}, ${color.bar}cc)`
-              : `linear-gradient(90deg, ${color.bar}99, ${color.bar}dd)`,
-            boxShadow: player.finished ? `0 0 16px ${color.glow}` : 'none',
-            transform: `scaleX(${player.progress / 100})`,
-            transformOrigin: 'left center',
-            transition: 'transform 0.35s ease-out, box-shadow 0.3s ease',
-          }}
-        />
-      </div>
-
-      {/* Status */}
-      <div
-        style={{
-          minWidth: 72,
-          textAlign: 'right',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 13,
-        }}
-      >
-        {player.finished ? (
-          <span style={{ color: color.text, fontWeight: 700 }}>
-            {player.elapsedMs ? `${(player.elapsedMs / 1000).toFixed(2)}s` : '✓'}
-          </span>
-        ) : (
-          <span style={{ color: 'rgba(255,255,255,0.3)' }}>
-            {player.progress}%
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function PhaseBadge({ phase, timeoutReached, playerCount }) {
   if (phase === 'waiting') {
