@@ -3,11 +3,31 @@ import { ProgressBar } from './components/ProgressBar';
 import { TypingTextPanel } from './components/TypingTextPanel';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
 import { createSocketClient } from './ws/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 const DEFAULT_BACKEND_ORIGIN = window.location.origin;
 const DEFAULT_WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://typetition-ws.trex.gr`;
 const BACKEND_HTTP_URL = import.meta.env.VITE_BACKEND_ORIGIN || DEFAULT_BACKEND_ORIGIN;
 const WS_URL = import.meta.env.VITE_WS_URL || DEFAULT_WS_URL;
+
+function calcWpm(typed, startTime) {
+  if (!startTime || !typed) return 0;
+  const minutes = (Date.now() - startTime) / 60000;
+  if (minutes < 0.01) return 0;
+  return Math.round(typed.trim().split(/\s+/).filter(Boolean).length / minutes);
+}
+
+function calcAccuracy(target, typed) {
+  if (!typed.length) return 100;
+  let correct = 0;
+  for (let i = 0; i < typed.length; i++) {
+    if (typed[i] === target[i]) correct++;
+  }
+  return Math.round((correct / typed.length) * 100);
+}
 
 function App() {
   const [name, setName] = useState('');
@@ -21,7 +41,18 @@ function App() {
   const [compMessage, setCompMessage] = useState('');
   const [pressedKeys, setPressedKeys] = useState([]);
   const [typed, setTyped] = useState('');
+  const [typingStartTime, setTypingStartTime] = useState(null);
   const socketRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  const activeTarget = useMemo(() => {
+    if (mode === 'training' && training) return training.text ?? '';
+    if (mode === 'competition' && competitionState?.started) return competitionState.text ?? '';
+    return '';
+  }, [mode, training, competitionState]);
+
+  const wpm = useMemo(() => calcWpm(typed, typingStartTime), [typed, typingStartTime]);
+  const accuracy = useMemo(() => calcAccuracy(activeTarget, typed), [activeTarget, typed]);
 
   const selectedProgress = useMemo(() => {
     if (mode === 'training') return training?.progress ?? 0;
@@ -49,7 +80,6 @@ function App() {
         setCompMessage(`Winner: ${winner.name} (${(winner.elapsedMs / 1000).toFixed(2)}s)`),
     });
     socketRef.current = client;
-
     return () => client.close();
   }, []);
 
@@ -69,151 +99,479 @@ function App() {
   }, []);
 
   function handleJoin() {
+    if (!name.trim()) return;
     socketRef.current?.send('join', { name });
   }
 
   function startLesson(lessonId) {
     setTyped('');
     setLessonResult(null);
+    setTypingStartTime(null);
     socketRef.current?.send('start_training', { lessonId });
+    setTimeout(() => textareaRef.current?.focus(), 100);
   }
 
   function joinCompetition() {
     setCompMessage('');
     setTyped('');
+    setTypingStartTime(null);
     socketRef.current?.send('join_competition');
+    setTimeout(() => textareaRef.current?.focus(), 100);
   }
 
   function handleTyping(value) {
+    if (!typingStartTime && value.length === 1) {
+      setTypingStartTime(Date.now());
+    }
     setTyped(value);
     if (mode === 'training') socketRef.current?.send('training_input', { typed: value });
     if (mode === 'competition') socketRef.current?.send('competition_input', { typed: value });
   }
 
+  const isActiveTyping =
+    (mode === 'training' && !!training) ||
+    (mode === 'competition' && !!competitionState?.started);
+
   return (
-    <main className="mx-auto min-h-screen max-w-5xl p-6">
-      <h1 className="mb-4 text-3xl font-bold">Typetition</h1>
-      <div className="mb-4 rounded-lg bg-slate-800 p-3 text-sm">
-        Online users: <b>{onlineCount}</b>
-      </div>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: 'var(--font-sans)',
+      }}
+    >
+      {/* Header */}
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '18px 32px',
+          borderBottom: '0.5px solid rgba(255,255,255,0.06)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 17,
+              fontWeight: 600,
+              color: 'rgba(255,255,255,0.9)',
+              letterSpacing: '-0.02em',
+            }}
+          >
+            typetition
+          </span>
+        </div>
+        <Badge>
+          <span
+            style={{
+              display: 'inline-block',
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: onlineCount > 0 ? 'oklch(0.72 0.14 160)' : 'rgba(255,255,255,0.2)',
+              marginRight: 6,
+            }}
+          />
+          {onlineCount} online
+        </Badge>
+      </header>
 
-      {!joined && (
-        <section className="mb-4 rounded-lg bg-slate-800 p-4">
-          <h2 className="mb-2 text-xl font-semibold">Enter your name</h2>
-          <div className="flex gap-2">
-            <input
-              className="w-full rounded bg-slate-900 p-2"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={24}
-              placeholder="Player name"
-            />
-            <button className="rounded bg-indigo-500 px-4 py-2" type="button" onClick={handleJoin}>
-              Join
-            </button>
-          </div>
-        </section>
-      )}
+      {/* Main content */}
+      <main
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: '32px 24px 40px',
+          maxWidth: 960,
+          width: '100%',
+          margin: '0 auto',
+          gap: 0,
+        }}
+      >
+        {/* Join card */}
+        {!joined && (
+          <Card
+            className="animate-fade-in"
+            style={{ width: '100%', maxWidth: 480, marginBottom: 24 }}
+          >
+            <CardHeader>
+              <CardTitle>Enter your name to join</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+                  maxLength={24}
+                  placeholder="Player name"
+                />
+                <Button onClick={handleJoin} disabled={!name.trim()}>
+                  Join
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-      {joined && !mode && (
-        <section className="mb-4 rounded-lg bg-slate-800 p-4">
-          <h2 className="mb-2 text-xl font-semibold">Choose mode</h2>
-          <div className="flex gap-2">
-            <button className="rounded bg-emerald-600 px-4 py-2" type="button" onClick={() => setMode('training')}>
-              Start Training
-            </button>
-            <button className="rounded bg-amber-600 px-4 py-2" type="button" onClick={() => setMode('competition')}>
-              Compete
-            </button>
-          </div>
-        </section>
-      )}
+        {/* Mode selection */}
+        {joined && !mode && (
+          <Card
+            className="animate-fade-in"
+            style={{ width: '100%', maxWidth: 480, marginBottom: 24 }}
+          >
+            <CardHeader>
+              <CardTitle>Choose a mode</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button
+                  style={{ flex: 1 }}
+                  onClick={() => setMode('training')}
+                >
+                  Practice
+                </Button>
+                <Button
+                  variant="outline"
+                  style={{ flex: 1 }}
+                  onClick={() => setMode('competition')}
+                >
+                  Compete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-      {mode === 'training' && (
-        <section className="mb-4 rounded-lg bg-slate-800 p-4">
-          <h2 className="mb-2 text-xl font-semibold">Training Lessons</h2>
-          <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-5">
-            {lessons.map((lesson) => (
-              <button
-                key={lesson.id}
-                className="rounded bg-slate-700 px-3 py-2 text-left hover:bg-slate-600"
-                type="button"
-                onClick={() => startLesson(lesson.id)}
+        {/* Training lesson list */}
+        {mode === 'training' && !training && (
+          <div className="animate-fade-in" style={{ width: '100%', marginBottom: 24 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 14,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: 'rgba(255,255,255,0.45)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                }}
               >
-                {lesson.id}. {lesson.title}
-              </button>
-            ))}
+                Select a lesson
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setMode(null)}>
+                Back
+              </Button>
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                gap: 8,
+              }}
+            >
+              {lessons.map((lesson) => (
+                <button
+                  key={lesson.id}
+                  onClick={() => startLesson(lesson.id)}
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '0.5px solid rgba(255,255,255,0.08)',
+                    borderRadius: 10,
+                    padding: '10px 14px',
+                    textAlign: 'left',
+                    color: 'rgba(255,255,255,0.7)',
+                    fontFamily: 'var(--font-sans)',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease, border-color 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.14)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                  }}
+                >
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                    {String(lesson.id).padStart(2, '0')}
+                  </span>
+                  <div style={{ marginTop: 4 }}>{lesson.title}</div>
+                </button>
+              ))}
+            </div>
           </div>
-          {training && (
-            <>
-              <p className="mb-2 text-sm">Time left: {training.remainingSec}s | Errors: {training.errors}</p>
-              <TypingTextPanel target={training.text} typed={typed} />
-              <textarea
-                className="mt-3 h-32 w-full rounded bg-slate-900 p-2"
-                value={typed}
-                onChange={(e) => handleTyping(e.target.value)}
-                placeholder="Start typing here..."
-              />
-              {lessonResult && (
-                <p className="mt-2 text-sm">
-                  {lessonResult.success ? 'Success!' : 'Failed'} | in time: {String(lessonResult.inTime)} | errors:{' '}
-                  {lessonResult.errors}
+        )}
+
+        {/* Competition lobby */}
+        {mode === 'competition' && !competitionState?.started && (
+          <Card
+            className="animate-fade-in"
+            style={{ width: '100%', maxWidth: 480, marginBottom: 24 }}
+          >
+            <CardHeader>
+              <CardTitle>Competition Room</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 16,
+                }}
+              >
+                <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
+                  Players: {competitionState?.count ?? 0} / {competitionState?.capacity ?? 5}
+                </span>
+                <Button variant="ghost" size="sm" onClick={() => setMode(null)}>
+                  Back
+                </Button>
+              </div>
+              <Button style={{ width: '100%' }} onClick={joinCompetition}>
+                Join Race
+              </Button>
+              {compMessage && (
+                <p
+                  style={{
+                    marginTop: 12,
+                    fontSize: 13,
+                    color: 'rgba(255,255,255,0.5)',
+                    textAlign: 'center',
+                  }}
+                >
+                  {compMessage}
                 </p>
               )}
-            </>
-          )}
-          <button className="mt-3 rounded bg-slate-700 px-3 py-2" type="button" onClick={() => setMode(null)}>
-            Back
-          </button>
-        </section>
-      )}
+              {!!competitionState?.players?.length && (
+                <ul style={{ marginTop: 16, listStyle: 'none', padding: 0, margin: '16px 0 0' }}>
+                  {competitionState.players.map((player, i) => (
+                    <li
+                      key={player.sessionId}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 0',
+                        borderTop: i > 0 ? '0.5px solid rgba(255,255,255,0.06)' : 'none',
+                        fontSize: 13,
+                        color: player.name === name ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.45)',
+                      }}
+                    >
+                      <span>{player.name}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                        {player.progress}%{player.finished ? ' ✓' : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
-      {mode === 'competition' && (
-        <section className="mb-4 rounded-lg bg-slate-800 p-4">
-          <h2 className="mb-2 text-xl font-semibold">Competition</h2>
-          <p className="mb-2 text-sm">
-            Players in room: {competitionState?.count ?? 0}/{competitionState?.capacity ?? 5}
-          </p>
-          <button className="mb-3 rounded bg-amber-600 px-4 py-2" type="button" onClick={joinCompetition}>
-            Join Competition
-          </button>
-          {compMessage && <p className="mb-2 text-sm">{compMessage}</p>}
-          {competitionState?.started && (
-            <>
-              <TypingTextPanel target={competitionState.text} typed={typed} />
-              <textarea
-                className="mt-3 h-32 w-full rounded bg-slate-900 p-2"
-                value={typed}
-                onChange={(e) => handleTyping(e.target.value)}
-                placeholder="Race text here..."
-              />
-            </>
-          )}
-          {!!competitionState?.players?.length && (
-            <ul className="mt-3 space-y-1 text-sm">
-              {competitionState.players.map((player) => (
-                <li key={player.sessionId} className="rounded bg-slate-900 p-2">
-                  {player.name}: {player.progress}% {player.finished ? '(finished)' : ''}
-                </li>
-              ))}
-            </ul>
-          )}
-          <button className="mt-3 rounded bg-slate-700 px-3 py-2" type="button" onClick={() => setMode(null)}>
-            Back
-          </button>
-        </section>
-      )}
+        {/* Active typing area */}
+        {isActiveTyping && (
+          <div
+            className="animate-fade-in"
+            style={{
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0,
+            }}
+          >
+            {/* Stats row */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 24,
+                marginBottom: 28,
+                paddingLeft: 2,
+              }}
+            >
+              <StatItem label="WPM" value={wpm} mono />
+              <StatItem label="Accuracy" value={`${accuracy}%`} mono />
+              {mode === 'training' && training && (
+                <StatItem label="Time left" value={`${training.remainingSec}s`} mono />
+              )}
+              {mode === 'training' && training && training.errors > 0 && (
+                <StatItem label="Errors" value={training.errors} />
+              )}
+              <div style={{ flex: 1 }} />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setMode(null);
+                  setTraining(null);
+                  setTyped('');
+                  setTypingStartTime(null);
+                  setLessonResult(null);
+                }}
+              >
+                Back
+              </Button>
+            </div>
 
-      <section className="mb-4 rounded-lg bg-slate-800 p-4">
-        <h3 className="mb-2 text-lg font-semibold">Your Progress</h3>
-        <ProgressBar value={selectedProgress} />
-      </section>
+            {/* Typing text */}
+            <div style={{ marginBottom: 20, minHeight: 80 }}>
+              <TypingTextPanel target={activeTarget} typed={typed} />
+            </div>
 
-      <section className="rounded-lg bg-slate-800 p-4">
-        <h3 className="mb-2 text-lg font-semibold">Keyboard</h3>
-        <VirtualKeyboard pressedKeys={pressedKeys} />
-      </section>
-    </main>
+            {/* Progress bar */}
+            <div style={{ marginBottom: 32 }}>
+              <ProgressBar value={selectedProgress} />
+            </div>
+
+            {/* Lesson result */}
+            {lessonResult && (
+              <div
+                style={{
+                  marginBottom: 24,
+                  padding: '10px 16px',
+                  borderRadius: 10,
+                  background: lessonResult.success
+                    ? 'rgba(50,200,120,0.1)'
+                    : 'rgba(220,80,60,0.1)',
+                  border: `0.5px solid ${lessonResult.success ? 'rgba(50,200,120,0.25)' : 'rgba(220,80,60,0.25)'}`,
+                  fontSize: 13,
+                  color: lessonResult.success ? 'oklch(0.72 0.14 160)' : 'oklch(0.65 0.22 25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                }}
+              >
+                <span>{lessonResult.success ? 'Lesson complete' : 'Time up'}</span>
+                <span style={{ color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                  errors: {lessonResult.errors}
+                </span>
+              </div>
+            )}
+
+            {/* Competition result */}
+            {compMessage && mode === 'competition' && (
+              <div
+                style={{
+                  marginBottom: 24,
+                  padding: '10px 16px',
+                  borderRadius: 10,
+                  background: 'rgba(80,160,255,0.1)',
+                  border: '0.5px solid rgba(80,160,255,0.25)',
+                  fontSize: 13,
+                  color: 'rgba(160,200,255,0.9)',
+                }}
+              >
+                {compMessage}
+              </div>
+            )}
+
+            {/* Hidden textarea */}
+            <textarea
+              ref={textareaRef}
+              value={typed}
+              onChange={(e) => handleTyping(e.target.value)}
+              style={{
+                position: 'absolute',
+                opacity: 0,
+                pointerEvents: 'none',
+                width: 1,
+                height: 1,
+                top: -9999,
+                left: -9999,
+              }}
+              aria-label="Typing input"
+              tabIndex={-1}
+            />
+
+            {/* Click-to-focus overlay hint */}
+            {!document.activeElement?.matches('textarea') && (
+              <div
+                onClick={() => textareaRef.current?.focus()}
+                style={{
+                  width: '100%',
+                  marginBottom: 20,
+                  padding: '10px',
+                  borderRadius: 10,
+                  border: '0.5px dashed rgba(255,255,255,0.1)',
+                  textAlign: 'center',
+                  fontSize: 12,
+                  color: 'rgba(255,255,255,0.25)',
+                  cursor: 'text',
+                  display: 'none',
+                }}
+              >
+                Click here to focus
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Keyboard — always visible once joined */}
+        {joined && (
+          <div
+            style={{
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0,
+              marginTop: isActiveTyping ? 0 : 32,
+            }}
+          >
+            {!isActiveTyping && (
+              <div style={{ marginBottom: 20 }}>
+                <ProgressBar value={selectedProgress} />
+              </div>
+            )}
+            <VirtualKeyboard pressedKeys={pressedKeys} />
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function StatItem({ label, value, mono }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 500,
+          color: 'rgba(255,255,255,0.3)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.07em',
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: 20,
+          fontWeight: 600,
+          fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
+          color: 'rgba(255,255,255,0.85)',
+          letterSpacing: '-0.02em',
+          lineHeight: 1,
+        }}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
 

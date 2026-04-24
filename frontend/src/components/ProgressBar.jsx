@@ -1,10 +1,20 @@
+import { Progress } from '@/components/ui/progress';
+
 export function ProgressBar({ value }) {
   return (
-    <div className="h-4 w-full rounded bg-slate-900">
-      <div
-        className="h-4 rounded bg-indigo-500 transition-all duration-150"
-        style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-      />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <Progress value={value} className="flex-1" />
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 12,
+          color: 'rgba(255,255,255,0.35)',
+          minWidth: 36,
+          textAlign: 'right',
+        }}
+      >
+        {value}%
+      </span>
     </div>
   );
 }

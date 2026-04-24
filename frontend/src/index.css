@@ -1,8 +1,58 @@
 @import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+:root {
+  --glass-blur: 20px;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  --key-bg: linear-gradient(160deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.04) 100%);
+  --key-border: rgba(255, 255, 255, 0.17);
+  --key-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  --key-pressed-bg: linear-gradient(160deg, rgba(80, 160, 255, 0.42) 0%, rgba(40, 100, 255, 0.2) 100%);
+  --key-pressed-shadow: 0 0 16px rgba(80, 160, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  --key-pressed-border: rgba(100, 170, 255, 0.4);
+
+  --color-correct: oklch(0.72 0.14 160);
+  --color-wrong: oklch(0.65 0.22 25);
+  --color-untyped: oklch(0.38 0.01 240);
+  --color-cursor: oklch(0.65 0.18 240);
+
+  --font-sans: 'Geist Variable', system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', 'Geist Mono', monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
 body {
   margin: 0;
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  background: #0f172a;
-  color: #e2e8f0;
+  font-family: var(--font-sans);
+  background: #08080f;
+  color: rgba(255, 255, 255, 0.85);
+  min-height: 100vh;
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out forwards;
 }
