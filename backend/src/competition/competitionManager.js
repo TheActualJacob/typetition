@@ -83,6 +83,7 @@ class CompetitionManager {
       capacity: ROOM_CAPACITY,
       count: this.count,
       started: this.started,
+      startedAt: this.startedAt,
       text: this.started ? this.text : '',
       winner: this.winner,
       players: [...this.players.values()].map((player) => ({
